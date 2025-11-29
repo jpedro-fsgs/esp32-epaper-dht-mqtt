@@ -1,54 +1,73 @@
 #include <Arduino.h>
-#include "screen.h"
-// #include <WiFi.h>
-// #include <PubSubClient.h>
-#include "DHT.h"
-// #include "credentials.h"
+#include "display_epaper.h"
+#include "sensors.h"
+#include "mqtt_client.h"
+#include "buttons.h"
 
 #define WHITE_BUTTON 13
 
-#define DHT22PIN 25
-#define LDR_ANALOG 35
-
-#define DHTTYPE DHT22
-
-DHT dht(DHT22PIN, DHTTYPE);
+// ---- Timers ----
+static unsigned long lastMqttSend = 0;
+static const unsigned long mqttInterval = 3000; // 3s entre envios MQTT
 
 void setup()
 {
-    pinMode(WHITE_BUTTON, INPUT_PULLUP);
-    dht.begin();
-    screen_setup();
+    Serial.begin(115200);
+    Serial.println("Setup iniciando...");
+
+    // Inicializa módulos
+    buttons_setup(WHITE_BUTTON);
+    sensors_setup();
+    display_setup();
+    mqtt_setup();
+
+    // Desenha rótulos estáticos e atualiza valores iniciais
+    drawStaticLayout();
+    SensorReadings r = sensors_read_all();
+    updateValues(r.temperatura, r.umidade, r.luminosidade);
 }
 
 void loop()
 {
-    if (digitalRead(WHITE_BUTTON) == LOW)
+    // Leitura de sensores (não bloqueante)
+    SensorReadings r = sensors_read_all();
+
+    // Mantém conexão MQTT viva
+    mqtt_loop();
+
+    // Se chegou nova mensagem MQTT, atualiza apenas a área da mensagem
+    String msg;
+    if (mqtt_consume_last_message(msg))
     {
-
-        int valor = analogRead(LDR_ANALOG);
-        float luminosidade = (4095 - valor) * 100.0 / 4095.0;
-        float umidade = dht.readHumidity();
-        float temperatura = dht.readTemperature();
-
-        // Caixa 1: Temperatura
-        display.setPartialWindow(10, 10, 220, 150);
-        display.firstPage();
-        do
-        {
-            display.fillRect(10, 10, 220, 150, GxEPD_WHITE);
-
-            display.setCursor(20, 30);
-            display.printf("Temp: %.1f C", temperatura);
-
-            display.setCursor(20, 60);
-            display.printf("Umid: %.1f %%", umidade);
-
-            display.setCursor(20, 90);
-            display.printf("Luz: %.1f %%", luminosidade);
-
-        } while (display.nextPage());
-
-        delay(5000);
+        updateMessage(msg);
     }
+
+    // Envio MQTT com intervalo (SEM delay)
+    unsigned long now = millis();
+    if (now - lastMqttSend >= mqttInterval)
+    {
+        lastMqttSend = now;
+        if (!mqtt_is_connected())
+        {
+            Serial.println("MQTT desconectado!");
+        }
+
+        bool ok1 = mqtt_publish("ESP32/luminosidade", String(r.luminosidade).c_str());
+        bool ok2 = mqtt_publish("ESP32/umidade", String(r.umidade).c_str());
+        bool ok3 = mqtt_publish("ESP32/temperatura", String(r.temperatura).c_str());
+
+        if (!ok1 || !ok2 || !ok3)
+        {
+            Serial.println("Falha ao publicar algum valor MQTT!");
+        }
+    }
+
+    // Botão com debounce + cooldown: atualiza tela quando pressionado
+    if (button_was_pressed())
+    {
+        updateValues(r.temperatura, r.umidade, r.luminosidade);
+    }
+
+    // Não usar delay() para lógicas principais; curto yield para permitir RTOS gerenciar tarefas
+    yield();
 }
