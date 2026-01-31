@@ -3,7 +3,7 @@
 #include <PubSubClient.h>
 #include "credentials.h"
 
-static const char *mqtt_server = "192.168.0.28";
+static const char *mqtt_server = "192.168.0.24";
 
 static WiFiClient espClient;
 static PubSubClient client(espClient);
@@ -86,8 +86,36 @@ void mqtt_setup()
   }
 }
 
+void mqtt_reconnect()
+{
+  // Loop until we're reconnected
+  while (!client.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (client.connect("ESP32Client"))
+    {
+      Serial.println("connected");
+      // Subscribe
+      client.subscribe("ESP32/message");
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
 void mqtt_loop()
 {
+  if (!client.connected())
+  {
+    mqtt_reconnect();
+  }
   client.loop();
 }
 
@@ -99,15 +127,4 @@ bool mqtt_publish(const char* topic, const char* payload)
 bool mqtt_is_connected()
 {
   return client.connected();
-}
-
-bool mqtt_consume_last_message(String &out)
-{
-  if (lastMqttMessageUpdated)
-  {
-    out = lastMqttMessage;
-    lastMqttMessageUpdated = false;
-    return true;
-  }
-  return false;
 }
