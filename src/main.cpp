@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Ticker.h>
 #include "sensors.h"
 #include "mqtt_client.h"
 
@@ -8,7 +9,8 @@
 // ---- Timers ----
 static unsigned long lastMqttSend = 0;
 static const unsigned long mqttInterval = 3000; // 3s entre envios MQTT
-static bool ledState = false;
+
+Ticker blinkTimer;
 
 // Buffers for MQTT messages
 char luminosidadeStr[8];
@@ -17,6 +19,10 @@ char temperaturaStr[8];
 
 bool ok1, ok2, ok3;
 
+void turnLedOff() {
+    analogWrite(LED_BUILTIN, 0);
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -24,7 +30,7 @@ void setup()
 
     // Inicializa LED
     pinMode(LED_BUILTIN, OUTPUT);
-    digitalWrite(LED_BUILTIN, LOW); // Start with LED off
+    analogWrite(LED_BUILTIN, 0); // Start with LED off
 
     // Inicializa módulos
     sensors_setup();
@@ -62,8 +68,8 @@ void loop()
         }
         else
         {
-            ledState = !ledState;
-            digitalWrite(LED_BUILTIN, ledState);
+            analogWrite(LED_BUILTIN, 50);
+            blinkTimer.once_ms(50, turnLedOff);
         }
     }
 
