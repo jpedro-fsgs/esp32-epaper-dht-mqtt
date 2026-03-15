@@ -1,10 +1,12 @@
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 #include <Ticker.h>
 #include "sensors.h"
 #include "mqtt_client.h"
 
 #define WHITE_BUTTON 13
 #define LED_BUILTIN 2 // Assuming ESP32 internal LED is on GPIO2
+#define WDT_TIMEOUT 5
 
 // ---- Timers ----
 static unsigned long lastMqttSend = 0;
@@ -27,6 +29,7 @@ void setup()
 {
     Serial.begin(115200);
     Serial.println("Setup iniciando...");
+    esp_task_wdt_init(WDT_TIMEOUT, true);
 
     // Inicializa LED
     pinMode(LED_BUILTIN, OUTPUT);
@@ -37,6 +40,7 @@ void setup()
     mqtt_setup();
 
     // Desenha rótulos estáticos e atualiza valores iniciais
+    esp_task_wdt_add(NULL);
     SensorReadings r = sensors_read_all();
 }
 
@@ -72,6 +76,7 @@ void loop()
             blinkTimer.once_ms(50, turnLedOff);
         }
     }
+    esp_task_wdt_reset();
 
     yield();
 }
