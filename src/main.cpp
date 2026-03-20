@@ -4,7 +4,6 @@
 #include "sensors.h"
 #include "mqtt_client.h"
 
-#define WHITE_BUTTON 13
 #define LED_BUILTIN 2 // Assuming ESP32 internal LED is on GPIO2
 #define WDT_TIMEOUT 5
 
@@ -21,7 +20,8 @@ char temperaturaStr[8];
 
 bool ok1, ok2, ok3;
 
-void turnLedOff() {
+void turnLedOff()
+{
     analogWrite(LED_BUILTIN, 0);
 }
 
@@ -47,7 +47,6 @@ void setup()
 void loop()
 {
     // Leitura de sensores (não bloqueante)
-    SensorReadings r = sensors_read_all();
 
     // Mantém conexão MQTT viva
     mqtt_loop();
@@ -58,22 +57,31 @@ void loop()
     {
         lastMqttSend = now;
 
-        // Convert float to string using dtostrf
-        dtostrf(r.luminosidade, 4, 2, luminosidadeStr);
-        dtostrf(r.umidade, 4, 2, umidadeStr);
-        dtostrf(r.temperatura, 4, 2, temperaturaStr);
+        SensorReadings r = sensors_read_all();
 
-        ok1 = mqtt_publish("ESP32/luminosidade", luminosidadeStr);
-        ok2 = mqtt_publish("ESP32/umidade", umidadeStr);
-        ok3 = mqtt_publish("ESP32/temperatura", temperaturaStr);
-        if (!ok1 || !ok2 || !ok3)
+        if (isnan(r.temperatura) || isnan(r.umidade))
         {
-            Serial.println("Falha ao publicar algum valor MQTT!");
+            Serial.println("Falha ao ler do sensor DHT22!");
         }
         else
         {
-            analogWrite(LED_BUILTIN, 50);
-            blinkTimer.once_ms(50, turnLedOff);
+
+            strcpy(luminosidadeStr, r.luminosidade ? "dark" : "light");
+            dtostrf(r.umidade, 4, 2, umidadeStr);
+            dtostrf(r.temperatura, 4, 2, temperaturaStr);
+
+            ok1 = mqtt_publish("ESP32/luminosidade", luminosidadeStr);
+            ok2 = mqtt_publish("ESP32/umidade", umidadeStr);
+            ok3 = mqtt_publish("ESP32/temperatura", temperaturaStr);
+            if (!ok1 || !ok2 || !ok3)
+            {
+                Serial.println("Falha ao publicar algum valor MQTT!");
+            }
+            else
+            {
+                analogWrite(LED_BUILTIN, 50);
+                blinkTimer.once_ms(50, turnLedOff);
+            }
         }
     }
     esp_task_wdt_reset();
