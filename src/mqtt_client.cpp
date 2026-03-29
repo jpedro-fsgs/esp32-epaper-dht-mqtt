@@ -2,6 +2,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include "credentials.h"
+#include <Ticker.h>
+
+Ticker mqttReconnectTimer;
 
 static const char *mqtt_server = "192.168.0.24";
 
@@ -46,6 +49,7 @@ void mqtt_setup()
   {
     Serial.println();
     Serial.println("Falha ao conectar no WiFi (timeout).");
+    return;
   }
 
   Serial.println("Conectando ao servidor MQTT...");
@@ -89,7 +93,7 @@ void mqtt_setup()
 void mqtt_reconnect()
 {
   // Loop until we're reconnected
-  while (!client.connected())
+  if (!client.connected())
   {
     Serial.print("Attempting MQTT connection...");
     // Attempt to connect
@@ -105,7 +109,8 @@ void mqtt_reconnect()
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying
-      delay(5000);
+      // delay(5000);
+      mqttReconnectTimer.once(5, mqtt_reconnect);
     }
   }
 }

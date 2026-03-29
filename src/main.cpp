@@ -3,9 +3,10 @@
 #include <Ticker.h>
 #include "sensors.h"
 #include "mqtt_client.h"
+#include "ping_buzzer.h"
 
 #define LED_BUILTIN 2 // Assuming ESP32 internal LED is on GPIO2
-#define WDT_TIMEOUT 5
+#define WDT_TIMEOUT 120
 
 // ---- Timers ----
 static unsigned long lastMqttSend = 0;
@@ -38,10 +39,9 @@ void setup()
     // Inicializa módulos
     sensors_setup();
     mqtt_setup();
+    setup_buzzer();
 
-    // Desenha rótulos estáticos e atualiza valores iniciais
     esp_task_wdt_add(NULL);
-    SensorReadings r = sensors_read_all();
 }
 
 void loop()
@@ -55,6 +55,8 @@ void loop()
     unsigned long now = millis();
     if (now - lastMqttSend >= mqttInterval)
     {
+
+        ping_server();
         lastMqttSend = now;
 
         SensorReadings r = sensors_read_all();
@@ -62,18 +64,19 @@ void loop()
         if (isnan(r.temperatura) || isnan(r.umidade))
         {
             Serial.println("Falha ao ler do sensor DHT22!");
+            mqtt_publish("ESP32/log", "Falha ao ler do sensor DHT22!");
         }
         else
         {
 
-            strcpy(luminosidadeStr, r.luminosidade ? "dark" : "light");
+            // strcpy(luminosidadeStr, r.luminosidade ? "dark" : "light");
             dtostrf(r.umidade, 4, 2, umidadeStr);
             dtostrf(r.temperatura, 4, 2, temperaturaStr);
 
-            ok1 = mqtt_publish("ESP32/luminosidade", luminosidadeStr);
+            // ok1 = mqtt_publish("ESP32/luminosidade", luminosidadeStr);
             ok2 = mqtt_publish("ESP32/umidade", umidadeStr);
             ok3 = mqtt_publish("ESP32/temperatura", temperaturaStr);
-            if (!ok1 || !ok2 || !ok3)
+            if (!ok2 || !ok3)
             {
                 Serial.println("Falha ao publicar algum valor MQTT!");
             }

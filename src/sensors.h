@@ -3,7 +3,7 @@
 struct SensorReadings {
     float temperatura;
     float umidade;
-    int luminosidade;
+    // int luminosidade;
 };
 
 void sensors_setup();
